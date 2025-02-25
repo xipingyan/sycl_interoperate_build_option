@@ -1,5 +1,8 @@
 
-source /opt/intel/oneapi/vtune/latest/vtune-vars.sh
+#source /opt/intel/oneapi/vtune/latest/vtune-vars.sh
+source /opt/intel/oneapi/vtune/2025.1_internal/vtune-vars.sh
+
+export LD_LIBRARY_PATH=/mnt/xiping/gpu_profiling/sycl_interoperate_build_option/onednn_kernel/onednn_ocl/oneDNN/build/install/lib:$LD_LIBRARY_PATH
 
 logs_dir=vtune_log_dir_ocl_onednn
 

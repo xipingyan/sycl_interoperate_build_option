@@ -10,22 +10,18 @@
 #include "oneapi/dnnl/dnnl.hpp"
 #include "oneapi/dnnl/dnnl_types.h"
 
+#define M 8
+#define K 896
+#define N 65536/2
+
 inline dnnl::memory::dim product(const dnnl::memory::dims &dims) {
     return std::accumulate(dims.begin(), dims.end(), (dnnl::memory::dim)1,
             std::multiplies<dnnl::memory::dim>());
 }
 
-void test_onednn_gemm_ocl(bool runtime_ocl,
-                          bool test_performance)
+void test_onednn_gemm_ocl(dnnl::engine engine,
+                          dnnl::stream engine_stream)
 {
-    dnnl::engine::kind engine_kind = dnnl::engine::kind::gpu;
-
-    // Create execution dnnl::engine.
-    dnnl::engine engine(engine_kind, 0);
-
-    // Create dnnl::stream.
-    dnnl::stream engine_stream(engine);
-
     // onednn_verbose,v1,primitive,exec,gpu:0,inner_product,jit:gemm:any,
     // forward_inference,
     // src:f16::blocked:abcd::f0 
@@ -36,14 +32,14 @@ void test_onednn_gemm_ocl(bool runtime_ocl,
     // mb8ic896ih1iw1oc151936,
     // 21.5701
 
-    dnnl::memory::dims src_dims = {8, 896};
-    dnnl::memory::dims wei_dims = {896, 65536/2}; // 151936, 4096
-    dnnl::memory::dims dst_dims = {8, 65536/2};
+    dnnl::memory::dims src_dims = {M, K};
+    dnnl::memory::dims wei_dims = {K, N}; // 151936, 4096
+    dnnl::memory::dims dst_dims = {M, N};
 
     // Allocate buffers.
     std::vector<ushort> src_data(product(src_dims));
     std::vector<ushort> weights_data(product(wei_dims));
-    std::vector<ushort> dst_data(product(dst_dims));
+    std::vector<float> dst_data(product(dst_dims));
 
     // Initialize src, weights, and dst tensors.
     std::generate(src_data.begin(), src_data.end(), []() {
@@ -124,28 +120,16 @@ void test_onednn_gemm_ocl(bool runtime_ocl,
 
 int main(int argc, char** argv)
 {
-    std::cout << "== $ onednn_gemm -h, show help message and exit app." << std::endl;
-    if (argc >= 2 && std::string(argv[1]) == std::string("-h")) {       
-        std::cout << "  argv[1]:  ocl: means test OpenCL runtime; sycl: means SYCL runtime. Default 1" << std::endl;
-        std::cout << "  argv[2]:  acc: means test accuracy. Default test performance." << std::endl;
-        exit(-1);
-    }
+    dnnl::engine::kind engine_kind = dnnl::engine::kind::gpu;
 
-    bool runtime_ocl = true;
-    bool test_performance = true;
-    if (argc >= 2 && std::string(argv[1]) == std::string("sycl"))
-    {
-        runtime_ocl = false;
-    }
-    if (argc >= 3 && std::string(argv[2]) == std::string("acc"))
-    {
-        test_performance = false;
-    }
-    std::cout << "  == runtime_ocl = " << runtime_ocl << std::endl;
-    std::cout << "  == test_performance = " << test_performance << std::endl;
+    // Create execution dnnl::engine.
+    dnnl::engine engine(engine_kind, 0);
+
+    // Create dnnl::stream.
+    dnnl::stream engine_stream(engine);
 
     std::cout << "== Start test onednn gemm. " << std::endl;
-    test_onednn_gemm_ocl(runtime_ocl, test_performance);
-    
+    test_onednn_gemm_ocl(engine, engine_stream);
+
     return 0;
 }

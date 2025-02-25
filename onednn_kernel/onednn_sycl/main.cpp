@@ -25,7 +25,7 @@ inline dnnl::memory::dim product(const dnnl::memory::dims &dims) {
             std::multiplies<dnnl::memory::dim>());
 }
 
-void test_onednn_kernel(dnnl::engine engine, dnnl::stream engine_stream, sycl::queue& queue)
+void test_onednn_kernel(dnnl::engine engine, dnnl::stream engine_stream)
 {
     dnnl::memory::dims src_dims = {M, K};
     dnnl::memory::dims wei_dims = {K, N};
@@ -34,7 +34,7 @@ void test_onednn_kernel(dnnl::engine engine, dnnl::stream engine_stream, sycl::q
     // Allocate buffers.
     std::vector<ushort> src_data(product(src_dims));
     std::vector<ushort> weights_data(product(wei_dims));
-    std::vector<ushort> dst_data(product(dst_dims));
+    std::vector<float> dst_data(product(dst_dims));
 
     // Initialize src, weights, and dst tensors.
     std::generate(src_data.begin(), src_data.end(), []()
@@ -65,6 +65,7 @@ void test_onednn_kernel(dnnl::engine engine, dnnl::stream engine_stream, sycl::q
     auto user_dst_mem = dnnl::memory(usr_dst_desc, engine);
 
     // Copy data from host to device.
+    sycl::queue queue = dnnl::sycl_interop::get_queue(engine_stream);
     queue.memcpy(user_src_mem.map_data(), src_data.data(), user_src_mem.get_desc().get_size()).wait();
     queue.memcpy(user_weights_mem.map_data(), weights_data.data(), user_weights_mem.get_desc().get_size()).wait();
 
@@ -98,7 +99,7 @@ void test_onednn_kernel(dnnl::engine engine, dnnl::stream engine_stream, sycl::q
     mm_args.insert({DNNL_ARG_DST, mm_dst_mem});
 
     std::cout << "== statrt execute." << std::endl;
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 100; i++)
     {
         auto t1 = std::chrono::high_resolution_clock::now();
         mm_prim.execute(engine_stream, mm_args);
@@ -106,13 +107,24 @@ void test_onednn_kernel(dnnl::engine engine, dnnl::stream engine_stream, sycl::q
         auto t2 = std::chrono::high_resolution_clock::now();
         std::cout << "  == " << i << ", tm = " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() << " micro sec" << std::endl;
     }
+
+    std::cout << "== copy dst buf." << std::endl;
+    queue.memcpy(dst_data.data(), mm_dst_mem.map_data(), mm_dst_mem.get_desc().get_size()).wait();
+
+    std::cout << "== save dst" << std::endl;
+    std::filebuf fb;
+    fb.open("result.log", std::ios::out);
+    std::ostream os(&fb);
+    os.precision(6);
+    for (size_t i = 0; i < dst_data.size(); i++)
+    {
+        os << std::fixed << dst_data[i] << std::endl;
+    }
+    fb.close();
 }
 
 int main(int argc, char** argv)
 {
-    // auto sycl_queue
-    //                     = dnnl::sycl_interop::get_queue(dnnl::stream(eng));
-    //             sycl_queue.memcpy(dst_ptr, handle, size).wait();
     auto queue = sycl::queue(sycl::gpu_selector_v);
     std::cout << "  == Using "
               << queue.get_device().get_info<sycl::info::device::name>()
@@ -122,7 +134,7 @@ int main(int argc, char** argv)
     auto engine = dnnl::sycl_interop::make_engine(queue.get_device(), queue.get_context());
     auto engine_stream = dnnl::sycl_interop::make_stream(engine, queue);
 
-    test_onednn_kernel(engine, engine_stream, queue);
+    test_onednn_kernel(engine, engine_stream);
 
     return 0;
 }
