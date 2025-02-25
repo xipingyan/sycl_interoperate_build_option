@@ -16,9 +16,11 @@
 #include <sycl/ext/oneapi/backend/level_zero.hpp>
 namespace syclex = sycl::ext::oneapi::experimental;
 
-static bool get_env(std::string env) {
+static bool get_env(std::string env)
+{
 	auto env_str = std::getenv(env.c_str());
-	if (env_str && std::string("1") == env_str) {
+	if (env_str && std::string("1") == env_str)
+	{
 		std::cout << "  == Get: " << env << " = 1" << std::endl;
 		return true;
 	}
@@ -46,7 +48,7 @@ static std::string load_kernel(std::string kernel_fn)
 }
 
 static sycl::event launchOpenCLKernelOnline(sycl::queue &q, std::string source,
-											std::string func_name, std::vector<std::pair<sycl::buffer<uint8_t, 1>, bool>> &params,
+											std::string func_name, std::vector<std::pair<void *, size_t>> &params,
 											sycl::event &dep_event, bool test_performance, bool use_option)
 {
 	std::cout << "  == Start to kernel_bundle opencl source" << std::endl;
@@ -60,9 +62,7 @@ static sycl::event launchOpenCLKernelOnline(sycl::queue &q, std::string source,
 	std::cout << "  == Start to kernel_bundle kb_src" << std::endl;
 	std::vector<std::string> option_flags = {"-cl-mad-enable", "-cl-std=CL2.0"};
 
-	sycl::kernel_bundle<sycl::bundle_state::executable> kb_exe = use_option ? 
-		syclex::build(kb_src, syclex::properties{syclex::build_options{option_flags}}) : 
-		syclex::build(kb_src);
+	sycl::kernel_bundle<sycl::bundle_state::executable> kb_exe = use_option ? syclex::build(kb_src, syclex::properties{syclex::build_options{option_flags}}) : syclex::build(kb_src);
 
 	// Get a "kernel" object representing the kernel defined in the
 	// source string.
@@ -76,6 +76,11 @@ static sycl::event launchOpenCLKernelOnline(sycl::queue &q, std::string source,
 			  << "], local_range=[" << ndr.get_local_range()[0] << ", " << ndr.get_local_range()[1] << ", "
 			  << ndr.get_local_range()[2] << "]" << std::endl;
 
+	for (int i = 0; i < params.size(); i++)
+	{
+		std::cout << "    params[" << i << "] = " << params[i].second << ", addr = " << params[i].first << std::endl;
+	}
+
 	std::cout << "  == Start to submit" << std::endl;
 	sycl::event ret_ev;
 	size_t loop_num = test_performance ? 15 : 1;
@@ -83,21 +88,14 @@ static sycl::event launchOpenCLKernelOnline(sycl::queue &q, std::string source,
 	{
 		auto t1 = std::chrono::high_resolution_clock::now();
 		ret_ev = q.submit([&](sycl::handler &cgh)
-				 {
+						  {
                         cgh.depends_on(dep_event);
+						// auto out = sycl::stream(1024, 768, cgh);
 
 						for (int i = 0; i < params.size(); i++)
 						{
-							if (params[i].second)
-							{
-								sycl::accessor acc_param{params[i].first, cgh, sycl::read_write};
-								cgh.set_arg(i, acc_param);
-							}
-							else
-							{
-								sycl::accessor acc_param{params[i].first, cgh, sycl::read_only};
-								cgh.set_arg(i, acc_param);
-							}
+							auto acc_param = sycl::ext::oneapi::experimental::raw_kernel_arg(params[i].first, params[i].second);
+							cgh.set_arg(i, acc_param);
 						}
 
 						// Invoke the kernel over an nd-range.
@@ -114,11 +112,11 @@ static sycl::event launchOpenCLKernelOnline(sycl::queue &q, std::string source,
 static sycl::event launchSyclKernel(sycl::queue &q, int *buf0, sycl::half *buf1, sycl::half *buf2, sycl::half *buf3, sycl::half *out_buf, bool test_performance)
 {
 	sycl::nd_range ndr = sycl::nd_range{sycl::range{1, 14, 192}, sycl::range{1, 2, 192}};
-	auto* shape_info = buf0;
-	auto* input = buf1;
-	auto* cos = buf2;
-	auto* sin = buf3;
-	auto* output = out_buf;
+	auto *shape_info = buf0;
+	auto *input = buf1;
+	auto *cos = buf2;
+	auto *sin = buf3;
+	auto *output = out_buf;
 
 	sycl::event ret_ev;
 	size_t loop_num = test_performance ? 15 : 1;
@@ -165,10 +163,10 @@ static sycl::event launchSyclKernel(sycl::queue &q, int *buf0, sycl::half *buf1,
 static sycl::event launchSyclKernel_expand_shape(sycl::queue &q, sycl::half *buf1, sycl::half *buf2, sycl::half *buf3, sycl::half *out_buf, bool test_performance)
 {
 	sycl::nd_range ndr = sycl::nd_range{sycl::range{1, 14, 192}, sycl::range{1, 2, 192}};
-	auto* input = buf1;
-	auto* cos = buf2;
-	auto* sin = buf3;
-	auto* output = out_buf;
+	auto *input = buf1;
+	auto *cos = buf2;
+	auto *sin = buf3;
+	auto *output = out_buf;
 
 	// 0, 1, 2, 3, 4, 5, 6,  7,  8, 9,10,11,12,13,14,15,16, 17, 18,19,20,21,22,23,24,25,26, 27,28,29,30,31,32, 33
 	//{1, 6, 1, 1, 1, 1, 14, 64, 0, 4, 1, 1, 1, 1, 1, 1, 6, 64, 1, 1, 1, 1, 1, 1, 6, 64, 1, 14, 1, 1, 1, 1, 6, 64}
@@ -218,14 +216,16 @@ static sycl::event launchSyclKernel_expand_shape(sycl::queue &q, sycl::half *buf
 int test_sycl_olc_interoperate_l0_backend_rope_ref()
 {
 	std::cout << "  OCL_KERNEL=1:  [Default] SYCL pipeline + OpenCL C kernel." << std::endl;
-	std::cout << "  SYCL_KERNEL=1: Test SYCL kernel in sycl pipeline.\n" << std::endl;
+	std::cout << "  SYCL_KERNEL=1: Test SYCL kernel in sycl pipeline.\n"
+			  << std::endl;
 	std::string options = "-cl-mad-enable -cl-std=CL2.0";
 	std::cout << "  USE_OPTION=1:   Build kernel with option:\"" << options << "\"" << std::endl;
 	std::cout << "== Test: " << __FUNCTION__ << ", " << __FILE__ << ":" << __LINE__ << std::endl;
 
 	bool test_performance = get_env("PERFORMANCE");
 	bool test_sycl_kernel = get_env("SYCL_KERNEL");
-	if (get_env("OCL_KERNEL")) {
+	if (get_env("OCL_KERNEL"))
+	{
 		test_sycl_kernel = false;
 	}
 	std::cout << "  == test_sycl_kernel = " << test_sycl_kernel << std::endl;
@@ -236,9 +236,7 @@ int test_sycl_olc_interoperate_l0_backend_rope_ref()
 	// Convert to clean code via:
 	// $ cpp original.cl > clean.cl
 	std::string kernel_path = "../src/kernel_rope_ref/";
-	std::string kernel_source = test_performance ? 
-		load_kernel(kernel_path + "SYCL_LZ_program_1_bucket_0_part_53_8491392767821923070.cl") : 
-		load_kernel(kernel_path + "SYCL_LZ_program_1_bucket_0_part_53_8491392767821923070_print_result.cl");
+	std::string kernel_source = test_performance ? load_kernel(kernel_path + "SYCL_LZ_program_1_bucket_0_part_53_8491392767821923070.cl") : load_kernel(kernel_path + "SYCL_LZ_program_1_bucket_0_part_53_8491392767821923070_print_result.cl");
 
 	// std::cout << "  kernel_source = " << kernel_source << std::endl;
 
@@ -249,14 +247,15 @@ int test_sycl_olc_interoperate_l0_backend_rope_ref()
 			  << std::endl;
 
 	sycl::event ev;
-	std::vector<std::pair<sycl::buffer<uint8_t, 1>, bool>> params;
+	// std::vector<std::pair<sycl::buffer<uint8_t, 1>, bool>> params;
+	std::vector<std::pair<void *, size_t>> params;
 
 	// gws=[1, 14, 192] lws=[1, 2, 192]
 	// input0: data_type=i32, {1, 6, 1, 1, 1, 1, 14, 64, 0, 4, 1, 1, 1, 1, 1, 1, 6, 64, 1, 1, 1, 1, 1, 1, 6, 64, 1, 14, 1, 1, 1, 1, 6, 64}
 	// input1: data_type=f16;format=bfyx;shape=[1,6,14,64];program1_network1_0_rope___module.model.layers.1.self_attn_aten__add_Add_src0.txt
-		// pad_l=[0, 0, 0, 0, 0, 0, 0, 0, 0, ];
-		// pad_u=[0, 0, 4, 0, 0, 0, 0, 0, 0, ];
-		// dyn_pad_dims=[000000100];
+	// pad_l=[0, 0, 0, 0, 0, 0, 0, 0, 0, ];
+	// pad_u=[0, 0, 4, 0, 0, 0, 0, 0, 0, ];
+	// dyn_pad_dims=[000000100];
 	// input2: data_type=f16;format=bfyx;shape=[1,1,6,64];
 	// input3: data_type=f16;format=bfyx;shape=[1,1,6,64];
 	// input4: data_type=f16;format=bfyx;shape=[1,14,6,64];
@@ -271,44 +270,50 @@ int test_sycl_olc_interoperate_l0_backend_rope_ref()
 	auto input3 = load_dump_data(kernel_path + "program1_network1_0_rope___module.model.layers.0.self_attn_aten__add_Add_src2.txt");
 	auto output_expected = load_dump_data(kernel_path + "program1_network1_0_rope___module.model.layers.0.self_attn_aten__add_Add_dst0.txt");
 
-	auto buf0 = input0.to_int(queue);
-	auto buf1 = input1.to_half(queue);
-	auto buf2 = input2.to_half(queue);
-	auto buf3 = input3.to_half(queue);
-	// for (size_t i = 0; i < input2.data.size(); i++) {
-	// 	std::cout << buf2[i] << ", ";
-	// }
-	// std::cout << std::endl;
-	auto* output_buf = sycl::malloc_shared<sycl::half>(output_expected.data.size(), queue);
+	auto buf_host_0 = input0.to_int(queue);
+	auto buf_host_1 = input1.to_half(queue);
+	auto buf_host_2 = input2.to_half(queue);
+	auto buf_host_3 = input3.to_half(queue);
+
+	auto buf_dev_0 = sycl::malloc_device<int>(input0.data.size(), queue);
+	auto buf_dev_1 = sycl::malloc_device<sycl::half>(input1.data.size(), queue);
+	auto buf_dev_2 = sycl::malloc_device<sycl::half>(input2.data.size(), queue);
+	auto buf_dev_3 = sycl::malloc_device<sycl::half>(input3.data.size(), queue);
+	auto output_host = sycl::malloc_host<sycl::half>(output_expected.data.size(), queue);
+	auto output_dev = sycl::malloc_device<sycl::half>(output_expected.data.size(), queue);
+
+	// Host to Device
+	queue.copy(buf_host_0, buf_dev_0, input0.data.size() * sizeof(int)).wait();
+	queue.copy(buf_host_1, buf_dev_1, input1.data.size() * sizeof(sycl::half)).wait();
+	queue.copy(buf_host_2, buf_dev_2, input2.data.size() * sizeof(sycl::half)).wait();
+	queue.copy(buf_host_3, buf_dev_3, input3.data.size() * sizeof(sycl::half)).wait();
 
 	if (test_sycl_kernel)
 	{
 		std::cout << "  == run sycl kernel." << std::endl;
-		auto ret_ev = launchSyclKernel(queue, buf0, buf1, buf2, buf3, output_buf, test_performance);
+		auto ret_ev = launchSyclKernel(queue, buf_dev_0, buf_dev_1, buf_dev_2, buf_dev_3, output_dev, test_performance);
 		// auto ret_ev = launchSyclKernel_expand_shape(queue, buf1, buf2, buf3, output_buf, test_performance);
 		ret_ev.wait();
 	}
 	else
 	{
-		std::cout << "  == run OpenCL kernel." << std::endl;
-		sycl::buffer param_0(reinterpret_cast<uint8_t *>(buf0), sycl::range{input0.data.size() * sizeof(int)});
-		sycl::buffer param_1(reinterpret_cast<uint8_t *>(buf1), sycl::range{input1.data.size() * sizeof(sycl::half)});
-		sycl::buffer param_2(reinterpret_cast<uint8_t *>(buf2), sycl::range{input2.data.size() * sizeof(sycl::half)});
-		sycl::buffer param_3(reinterpret_cast<uint8_t *>(buf3), sycl::range{input3.data.size() * sizeof(sycl::half)});
-		params.push_back({param_0, false});
-		params.push_back({param_1, false});
-		params.push_back({param_2, false});
-		params.push_back({param_3, false});
-		sycl::buffer param_4(reinterpret_cast<uint8_t *>(output_buf), sycl::range{output_expected.data.size() * sizeof(sycl::half)});
-		params.push_back({param_4, true});
+		std::cout << "  == run OpenCL C kernel." << std::endl;
+		params.push_back({buf_dev_0, input0.data.size() * sizeof(int)});
+		params.push_back({buf_dev_1, input1.data.size() * sizeof(sycl::half)});
+		params.push_back({buf_dev_2, input2.data.size() * sizeof(sycl::half)});
+		params.push_back({buf_dev_3, input3.data.size() * sizeof(sycl::half)});
+		params.push_back({output_dev, output_expected.data.size() * sizeof(sycl::half)});
 
 		auto ret_ev = launchOpenCLKernelOnline(queue, kernel_source, "rope_ref_11982042700243959200_0_0__sa", params, ev, test_performance, use_option);
 		ret_ev.wait();
 	}
 
+	// Device to Host
+	queue.copy(output_dev, output_host, output_expected.data.size() * sizeof(sycl::half)).wait();
+
 	// Compare result.
 	// ???????????????????????
-	// I don't why I can't get result from output_buf(it is shared), 
+	// I don't why I can't get result from output_buf(it is shared),
 	// because If I replace to some simple kernels, I can get result from output_buf.
 	if (!test_performance)
 	{
@@ -316,10 +321,10 @@ int test_sycl_olc_interoperate_l0_backend_rope_ref()
 		int diff_num = 0;
 		for (size_t i = 0; i < output_expected.data.size(); i++)
 		{
-			if (fabs(output_expected.data[i] - output_buf[i]) > 0.00001f)
+			if (fabs(output_expected.data[i] - output_host[i]) > 0.00001f)
 			{
 				diff_num++;
-				std::cout << "    output_expected[" << i << "] = " << output_expected.data[i] << " VS output_buf[" << i << "] = " << output_buf[i] << std::endl;
+				std::cout << "    output_expected[" << i << "] = " << output_expected.data[i] << " VS output_host[" << i << "] = " << output_host[i] << std::endl;
 			}
 			if (diff_num > 5)
 			{
@@ -331,10 +336,16 @@ int test_sycl_olc_interoperate_l0_backend_rope_ref()
 		std::cout << "  == Input and Ouput are " << (diff_num == 0 ? "Same." : "Not Same.") << std::endl;
 	}
 
-	sycl::free(buf0, queue);
-	sycl::free(buf1, queue);
-	sycl::free(buf2, queue);
-	sycl::free(buf3, queue);
-	sycl::free(output_buf, queue);
+	sycl::free(buf_host_0, queue);
+	sycl::free(buf_dev_0, queue);
+	sycl::free(buf_host_1, queue);
+	sycl::free(buf_dev_1, queue);
+	sycl::free(buf_host_2, queue);
+	sycl::free(buf_dev_2, queue);
+	sycl::free(buf_host_3, queue);
+	sycl::free(buf_dev_3, queue);
+	sycl::free(output_host, queue);
+	sycl::free(output_dev, queue);
+
 	return 0;
 }
