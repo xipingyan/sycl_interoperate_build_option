@@ -15,6 +15,7 @@
 
 #include <sycl/ext/oneapi/backend/level_zero.hpp>
 namespace syclex = sycl::ext::oneapi::experimental;
+#include <sycl/ext/oneapi/properties/properties.hpp>
 
 static bool get_env(std::string env)
 {
@@ -83,7 +84,7 @@ static sycl::event launchOpenCLKernelOnline(sycl::queue &q, std::string source,
 
 	std::cout << "  == Start to submit" << std::endl;
 	sycl::event ret_ev;
-	size_t loop_num = test_performance ? 15 : 1;
+	size_t loop_num = test_performance ? 150 : 1;
 	for (size_t i = 0; i < loop_num; i++)
 	{
 		auto t1 = std::chrono::high_resolution_clock::now();
@@ -275,25 +276,43 @@ int test_sycl_olc_interoperate_l0_backend_rope_ref()
 	auto buf_host_2 = input2.to_half(queue);
 	auto buf_host_3 = input3.to_half(queue);
 
-	auto buf_dev_0 = sycl::malloc_device<int>(input0.data.size(), queue);
-	auto buf_dev_1 = sycl::malloc_device<sycl::half>(input1.data.size(), queue);
-	auto buf_dev_2 = sycl::malloc_device<sycl::half>(input2.data.size(), queue);
-	auto buf_dev_3 = sycl::malloc_device<sycl::half>(input3.data.size(), queue);
+	// Device memory will trigger app crash.
+#if 0
+	auto buf_dev_0 = sycl::malloc_device(input0.data.size() * sizeof(int), queue);
+	auto buf_dev_1 = sycl::malloc_device(input1.data.size() * sizeof(sycl::half), queue);
+	auto buf_dev_2 = sycl::malloc_device(input2.data.size() * sizeof(sycl::half), queue);
+	auto buf_dev_3 = sycl::malloc_device(input3.data.size() * sizeof(sycl::half), queue);
 	auto output_host = sycl::malloc_host<sycl::half>(output_expected.data.size(), queue);
-	auto output_dev = sycl::malloc_device<sycl::half>(output_expected.data.size(), queue);
+	auto output_dev = sycl::malloc_device(output_expected.data.size() * sizeof(sycl::half), queue);
+#else
+	// aligned_alloc_device, aligned_alloc_shared
+	// auto buf_dev_0 = sycl::aligned_alloc_shared(128, input0.data.size() * sizeof(int) + 64, queue);
+	// auto buf_dev_1 = sycl::aligned_alloc_shared(128, input1.data.size() * sizeof(sycl::half) + 64, queue);
+	// auto buf_dev_2 = sycl::aligned_alloc_shared(128, input2.data.size() * sizeof(sycl::half) + 64, queue);
+	// auto buf_dev_3 = sycl::aligned_alloc_shared(128, input3.data.size() * sizeof(sycl::half) + 64, queue);
+	// auto output_host = sycl::malloc_host<sycl::half>(output_expected.data.size(), queue);
+	// auto output_dev = sycl::aligned_alloc_shared(128, output_expected.data.size() * sizeof(sycl::half) + 64, queue);
+
+	auto buf_dev_0 = sycl::malloc_shared(input0.data.size() * sizeof(int) + 64, queue);
+	auto buf_dev_1 = sycl::malloc_shared(input1.data.size() * sizeof(sycl::half) + 64, queue);
+	auto buf_dev_2 = sycl::malloc_shared(input2.data.size() * sizeof(sycl::half) + 64, queue);
+	auto buf_dev_3 = sycl::malloc_shared(input3.data.size() * sizeof(sycl::half) + 64, queue);
+	auto output_host = sycl::malloc_host<sycl::half>(output_expected.data.size(), queue);
+	auto output_dev = sycl::malloc_shared(output_expected.data.size() * sizeof(sycl::half) + 64, queue);
+#endif
 
 	// Host to Device
-	queue.copy(buf_host_0, buf_dev_0, input0.data.size() * sizeof(int)).wait();
-	queue.copy(buf_host_1, buf_dev_1, input1.data.size() * sizeof(sycl::half)).wait();
-	queue.copy(buf_host_2, buf_dev_2, input2.data.size() * sizeof(sycl::half)).wait();
-	queue.copy(buf_host_3, buf_dev_3, input3.data.size() * sizeof(sycl::half)).wait();
+	queue.memcpy(buf_dev_0, buf_host_0, input0.data.size() * sizeof(int)).wait();
+	queue.memcpy(buf_dev_1, buf_host_1, input1.data.size() * sizeof(sycl::half)).wait();
+	queue.memcpy(buf_dev_2, buf_host_2, input2.data.size() * sizeof(sycl::half)).wait();
+	queue.memcpy(buf_dev_3, buf_host_3, input3.data.size() * sizeof(sycl::half)).wait();
 
 	if (test_sycl_kernel)
 	{
 		std::cout << "  == run sycl kernel." << std::endl;
-		auto ret_ev = launchSyclKernel(queue, buf_dev_0, buf_dev_1, buf_dev_2, buf_dev_3, output_dev, test_performance);
+		// auto ret_ev = launchSyclKernel(queue, buf_dev_0, buf_dev_1, buf_dev_2, buf_dev_3, output_dev, test_performance);
 		// auto ret_ev = launchSyclKernel_expand_shape(queue, buf1, buf2, buf3, output_buf, test_performance);
-		ret_ev.wait();
+		// ret_ev.wait();
 	}
 	else
 	{
@@ -309,7 +328,7 @@ int test_sycl_olc_interoperate_l0_backend_rope_ref()
 	}
 
 	// Device to Host
-	queue.copy(output_dev, output_host, output_expected.data.size() * sizeof(sycl::half)).wait();
+	queue.memcpy(output_host, output_dev, output_expected.data.size() * sizeof(sycl::half)).wait();
 
 	// Compare result.
 	// ???????????????????????
