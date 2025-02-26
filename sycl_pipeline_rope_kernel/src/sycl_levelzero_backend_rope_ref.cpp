@@ -95,8 +95,7 @@ static sycl::event launchOpenCLKernelOnline(sycl::queue &q, std::string source,
 
 						for (int i = 0; i < params.size(); i++)
 						{
-							auto acc_param = sycl::ext::oneapi::experimental::raw_kernel_arg(params[i].first, params[i].second);
-							cgh.set_arg(i, acc_param);
+							cgh.set_arg(i, params[i].first);
 						}
 
 						// Invoke the kernel over an nd-range.
@@ -277,7 +276,7 @@ int test_sycl_olc_interoperate_l0_backend_rope_ref()
 	auto buf_host_3 = input3.to_half(queue);
 
 	// Device memory will trigger app crash.
-#if 0
+#if 1
 	auto buf_dev_0 = sycl::malloc_device(input0.data.size() * sizeof(int), queue);
 	auto buf_dev_1 = sycl::malloc_device(input1.data.size() * sizeof(sycl::half), queue);
 	auto buf_dev_2 = sycl::malloc_device(input2.data.size() * sizeof(sycl::half), queue);
