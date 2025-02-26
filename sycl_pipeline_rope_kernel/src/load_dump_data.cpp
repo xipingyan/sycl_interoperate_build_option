@@ -23,7 +23,7 @@ std::string DumpData::to_string()
 
 sycl::half *DumpData::to_half(sycl::queue queue)
 {
-    auto buf = sycl::malloc_shared<sycl::half>(data.size(), queue);
+    auto buf = sycl::malloc_host<sycl::half>(data.size(), queue);
     for (size_t i = 0; i < data.size(); i++)
     {
         buf[i] = static_cast<sycl::half>(data[i]);
@@ -33,7 +33,7 @@ sycl::half *DumpData::to_half(sycl::queue queue)
 
 int* DumpData::to_int(sycl::queue queue)
 {
-    auto buf = sycl::malloc_shared<int>(data.size(), queue);
+    auto buf = sycl::malloc_host<int>(data.size(), queue);
     for (size_t i = 0; i < data.size(); i++)
     {
         buf[i] = static_cast<int>(data[i]);

@@ -167,7 +167,7 @@ int main(int argc, char **argv)
 
 	auto kernel_name = kernel_add.getInfo<CL_KERNEL_FUNCTION_NAME>();
 	std::cout << "== Test get kernel name from cl::Kernel, kernel_name = " << kernel_name << std::endl;
-	size_t loop_num = test_performance ? 15 : 1;
+	size_t loop_num = test_performance ? 150 : 1;
 	for (size_t i = 0; i < loop_num; i++)
 	{
 		auto t1 = std::chrono::high_resolution_clock::now();
