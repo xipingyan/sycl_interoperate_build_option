@@ -27,5 +27,5 @@ then
     ./build_sycl/onednn_kernel_sycl $loop_num
 else
     export LD_LIBRARY_PATH=`pwd`/onednn_ocl/oneDNN/build/install/lib:$LD_LIBRARY_PATH
-    ONEDNN_VERBOSE=1 ./build_ocl/onednn_kernel_ocl  $loop_num
+    ./build_ocl/onednn_kernel_ocl  $loop_num
 fi

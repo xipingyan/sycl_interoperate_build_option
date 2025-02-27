@@ -48,16 +48,12 @@ void test_onednn_kernel(dnnl::engine engine, dnnl::stream engine_stream, int loo
         static int i = 0;
         return (ushort)(std::sin(i++ * 2.f) * 10); });
 
-    #define DEBUG_POS std::cout << "Line:" << __LINE__ << std::endl
-    DEBUG_POS;
     dnnl::memory::desc src_desc = dnnl::memory::desc(src_dims, dnnl::memory::data_type::f16, dnnl::memory::format_tag::any);
     dnnl::memory::desc weights_desc = dnnl::memory::desc(wei_dims, dnnl::memory::data_type::f16, dnnl::memory::format_tag::any);
     dnnl::memory::desc dst_desc = dnnl::memory::desc(dst_dims, dnnl::memory::data_type::f32, dnnl::memory::format_tag::any);
-    DEBUG_POS;
 
     dnnl::memory::desc usr_src_desc = dnnl::memory::desc(src_dims, dnnl::memory::data_type::f16, dnnl::memory::format_tag::ab);
     dnnl::memory::desc usr_weights_desc = dnnl::memory::desc(wei_dims, dnnl::memory::data_type::f16, dnnl::memory::format_tag::ab);
-    DEBUG_POS;
     dnnl::memory::desc usr_dst_desc = dnnl::memory::desc(dst_dims, dnnl::memory::data_type::f32, dnnl::memory::format_tag::ab);
 
     std::cout << "== prepare primitive_desc." << std::endl;
@@ -77,6 +73,14 @@ void test_onednn_kernel(dnnl::engine engine, dnnl::stream engine_stream, int loo
     queue.memcpy(user_src_mem.map_data(), src_data.data(), user_src_mem.get_desc().get_size()).wait();
     queue.memcpy(user_weights_mem.map_data(), weights_data.data(), user_weights_mem.get_desc().get_size()).wait();
 #else
+    void *mapped_ptr = user_src_mem.map_data();
+    if (mapped_ptr)
+        std::memcpy(mapped_ptr, src_data.data(), user_src_mem.get_desc().get_size());
+    user_src_mem.unmap_data(mapped_ptr);
+    mapped_ptr = user_weights_mem.map_data();
+    if (mapped_ptr)
+        std::memcpy(mapped_ptr, weights_data.data(), user_weights_mem.get_desc().get_size());
+    user_weights_mem.unmap_data(mapped_ptr);
 #endif
 
     std::cout << "== user to mm memory." << std::endl;

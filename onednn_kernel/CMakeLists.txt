@@ -31,7 +31,9 @@ add_executable(${PRJ_NAME}
 	${SRC}
 )
 
-add_sycl_to_target(TARGET ${PRJ_NAME}  SOURCES ${SRC} )
+if(GPU_RUNTIME STREQUAL "SYCL")
+	add_sycl_to_target(TARGET ${PRJ_NAME}  SOURCES ${SRC} )
+endif()
 
 target_link_libraries(${PRJ_NAME} PRIVATE DNNL::dnnl)
 
