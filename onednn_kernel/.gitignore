@@ -1,3 +1,7 @@
 build
+build_sycl
+build_ocl
 oneDNN
 .vscode
+*.log
+vtune_dir*
