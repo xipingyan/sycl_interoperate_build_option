@@ -79,8 +79,8 @@ dnnl::memory reorder_memory(dnnl::memory &user_mem, const dnnl::memory::desc& pd
 
 void test_onednn_kernel(dnnl::engine engine, dnnl::stream engine_stream, int loop_num)
 {
-    dnnl::memory::dims src_dims = {M, K};
-    dnnl::memory::dims wei_dims = {N, K};
+    dnnl::memory::dims src_dims = {M, K, 1, 1};
+    dnnl::memory::dims wei_dims = {N, K, 1, 1};
     dnnl::memory::dims dst_dims = {M, N};
 
     // Allocate buffers.
@@ -91,16 +91,26 @@ void test_onednn_kernel(dnnl::engine engine, dnnl::stream engine_stream, int loo
     // Initialize src, weights, and dst tensors.
     init_inputs(src_data, weights_data);
 
+    // onednn_verbose,v1,primitive,exec,gpu:0,inner_product,jit:gemm:any,forward_inference,
+    // src:f16::blocked:abcd::f0 
+    // wei:f16:a:blocked:abcd::f0 bia:undef::undef::: 
+    // dst:f32::blocked:ab::f0,attr-scratchpad:user,,
+    // mb8ic896ih1iw1oc151936,21.5701
+
     dnnl::memory::desc src_desc = dnnl::memory::desc(src_dims, dnnl::memory::data_type::f16, dnnl::memory::format_tag::any);
     dnnl::memory::desc weights_desc = dnnl::memory::desc(wei_dims, dnnl::memory::data_type::f16, dnnl::memory::format_tag::any);
     dnnl::memory::desc dst_desc = dnnl::memory::desc(dst_dims, dnnl::memory::data_type::f32, dnnl::memory::format_tag::any);
 
-    dnnl::memory::desc usr_src_desc = dnnl::memory::desc(src_dims, dnnl::memory::data_type::f16, dnnl::memory::format_tag::ab);
-    dnnl::memory::desc usr_weights_desc = dnnl::memory::desc(wei_dims, dnnl::memory::data_type::f16, dnnl::memory::format_tag::ab);
+    dnnl::memory::desc usr_src_desc = dnnl::memory::desc(src_dims, dnnl::memory::data_type::f16, dnnl::memory::format_tag::abcd);
+    dnnl::memory::desc usr_weights_desc = dnnl::memory::desc(wei_dims, dnnl::memory::data_type::f16, dnnl::memory::format_tag::abcd);
     dnnl::memory::desc usr_dst_desc = dnnl::memory::desc(dst_dims, dnnl::memory::data_type::f32, dnnl::memory::format_tag::ab);
 
     std::cout << "== prepare primitive_desc." << std::endl;
-    auto ip_pd = dnnl::inner_product_forward::primitive_desc(engine, dnnl::prop_kind::forward_inference, src_desc, weights_desc, dst_desc);
+    dnnl::primitive_attr prim_attr;
+    prim_attr.set_scratchpad_mode(dnnl::scratchpad_mode::user);
+    auto ip_pd = dnnl::inner_product_forward::primitive_desc(engine,
+                                                             dnnl::prop_kind::forward_inference,
+                                                             src_desc, weights_desc, dst_desc, prim_attr);
 
     std::cout << "== construct inner_product_forward primitive." << std::endl;
     auto ip_prim = dnnl::inner_product_forward(ip_pd);
