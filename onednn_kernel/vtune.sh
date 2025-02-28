@@ -39,8 +39,3 @@ else
     # ONEDNN_VERBOSE=1
     vtune -collect gpu-hotspots -r $logs_dir -knob gpu-sampling-interval=0.1 -- ./build_ocl/onednn_kernel_ocl $loop_num
 fi
-
-
-
-# OV_GPU_Verbose=4 ONEDNN_VERBOSE=1 
-vtune -collect gpu-hotspots -r $logs_dir -knob gpu-sampling-interval=0.1 -- ./onednn_kernel
