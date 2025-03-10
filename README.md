@@ -1,69 +1,29 @@
 # sycl_interoperate_build_option
-Verify build options work or not for SYCL interoperate with OpenCL kernel source.
+Just compare the performance between SYCL pipeline and OCL pipeline if they have some OpenCL C kernel source.
 
-# Build
+# Run OpenCL pipeline
 
-    Build ocl_pipeline_rope_kernel based on ocl_pipeline_rope_kernel/README.md
-    Build sycl_pipeline_rope_kernel based on sycl_pipeline_rope_kernel/README.md
-
-# Run OpenCL
-
-    <!-- Get OpenCL pipeline result -->
     source /opt/intel/oneapi/setvars.sh 
-    cd ocl_pipeline_rope_kernel/build/
+    cd sycl_interoperate_build_option/ocl_pipeline_sdpa_kernel/
+    mkdir build && cd build
+    cmake ..
+    make -j20
+    ../run.sh 
 
-    USE_OPTION=1 ./ocl_pipeline_rope_kernel result_ocl_option.log
-    ./ocl_pipeline_rope_kernel result_ocl.log
+    == Infer 147, time = 1208 micro sec.
+    == Infer 148, time = 1211 micro sec.
+    == Infer 149, time = 1219 micro sec.
 
-#### Compare result
+# Run SYCL pipeline
 
-    cd sycl_interoperate_build_option
+    source /opt/intel/oneapi/setvars.sh 
+    cd sycl_interoperate_build_option/sycl_pipeline_sdpa_kernel/
+    mkdir build && cd build
+    cmake -DCMAKE_CXX_COMPILER=icpx ..
+    make -j20
+    ../run.sh 
 
-    python cmp_2_fn.py ./ocl_pipeline_rope_kernel/build/result_ocl.log ./ocl_pipeline_rope_kernel/build/result_ocl_option.log 
+    == Infer 147, time = 1840 micro sec.
+    == Infer 148, time = 1841 micro sec.
+    == Infer 149, time = 1844 micro sec.
 
-    ...
-    @- Line-5351 0.079956
-    #+ Line-5351 0.079895
-
-    @- Line-5354 2.851562
-    #+ Line-5354 2.849609
-
-    Total diff: 410 / 5377
-
-# Run SYCL
-
-    cd sycl_interoperate_build_option/sycl_pipeline_rope_kernel/build
-    USE_OPTION=1 ./sycl_pipeline_rope_kernel > result_sycl_option.log
-    ./sycl_pipeline_rope_kernel > result_sycl.log
-
-    <!-- Convert and sort print output -->
-    python ../../cvt.py result_sycl_option.log ./result_sycl_option_cvted.log
-    python ../../cvt.py result_sycl.log ./result_sycl_cvted.log
-
-#### Compare sycl result
-
-    python ../../cmp_2_fn.py ./result_sycl_option_cvted.log result_sycl_cvted.log
-
-    Total diff: 0 / 5377         Means: enable and not enable build option have same result.
-
-# Compare OpenCL and Sycl Result
-
-    cd sycl_interoperate_build_option
-
-    <!-- Sycl without option VS Ocl with option -->
-    python cmp_2_fn.py sycl_pipeline_rope_kernel/build/result_sycl_cvted.log ocl_pipeline_rope_kernel/build/result_ocl_option.log 
-
-    @- Line-5351 0.079956
-    #+ Line-5351 0.079895
-
-    @- Line-5354 2.851562
-    #+ Line-5354 2.849609
-
-    Total diff: 410 / 5377
-
-    <!-- Sycl without option VS Ocl without option -->
-    python cmp_2_fn.py sycl_pipeline_rope_kernel/build/result_sycl_cvted.log ocl_pipeline_rope_kernel/build/result_ocl.log 
-
-    Total diff: 0 / 5377  Means: they are same.
-
-``Conclusion``:  So I guess build option doesn't work.
