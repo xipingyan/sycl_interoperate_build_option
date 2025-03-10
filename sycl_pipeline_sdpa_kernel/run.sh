@@ -9,7 +9,7 @@ export OV_DEVICE='GPU'
 # OV_GPU_Verbose=4 ONEDNN_VERBOSE=1 
 
 # SYCL_KERNEL=1 
-# PERFORMANCE=1 ./sycl_pipeline_sdpa_kernel
+PERFORMANCE=1 ./sycl_pipeline_sdpa_kernel
 
-# SYCL_KERNEL=1 
-PERFORMANCE=1  onetrace --chrome-call-logging --chrome-device-timeline ./sycl_pipeline_sdpa_kernel
+# onetrace profiling
+# PERFORMANCE=1  onetrace --chrome-call-logging --chrome-device-timeline ./sycl_pipeline_sdpa_kernel
