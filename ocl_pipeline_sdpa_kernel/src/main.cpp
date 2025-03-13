@@ -31,6 +31,72 @@ static std::string load_kernel(std::string kernel_fn)
 	return std::string();
 }
 
+int test_build_asm(cl::Device& default_device, bool test_performance = true) {
+	const char *kernel_code = R""""(
+        // Kernel name: igc_check
+        kernel void igc_check() {
+            __asm__ volatile(
+                    ".decl AA0 v_type=G type=ud num_elts=1\n"
+                    ".decl AA1 v_type=G type=ud num_elts=1\n"
+                    ".implicit_PSEUDO_INPUT AA0 offset=256 size=4\n"
+                    ".implicit_PSEUDO_INPUT AA1 offset=256 size=4\n"
+                    "mov (M1_NM,1) AA0(0,0)<1> AA1(0,0)<0;1,0>\n"
+            );
+        }
+        )"""";
+	
+	std::cout << "== Create context" << std::endl;
+	cl::Context context({default_device});
+
+	std::cout << "== Create Sources" << std::endl;
+	cl::Program::Sources sources;
+
+	std::cout << "== Put kernel string to source." << std::endl;
+	sources.push_back({kernel_code, strlen(kernel_code)});
+
+	std::cout << "== Construct program with source and context." << std::endl;
+	cl::Program program(context, sources);
+
+	std::string options = "-cl-mad-enable -cl-std=CL2.0";
+	if (program.build({default_device}, options.c_str()) != CL_SUCCESS)
+	{
+		std::cout << " Error building: " << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(default_device) << "\n";
+		exit(1);
+	}
+
+	// Construct kernel 1
+	cl::vector<cl::Kernel> kernels;
+	program.createKernels(&kernels);
+	for (auto func_name : kernels)
+	{
+		auto kernel_name = func_name.getInfo<CL_KERNEL_FUNCTION_NAME>();
+		std::cout << "  == Get kernel function name from  = " << kernel_name << std::endl;
+	}
+
+	std::cout << "== Create command queue" << std::endl;
+	// create queue to which we will push commands for the device.
+	cl::CommandQueue queue(context, default_device);
+
+	cl::Kernel kernel_asm = cl::Kernel(program, "igc_check");
+
+	auto kernel_name = kernel_asm.getInfo<CL_KERNEL_FUNCTION_NAME>();
+	std::cout << "== Test get kernel name from cl::Kernel, kernel_name = " << kernel_name << std::endl;
+	size_t loop_num = test_performance ? 150 : 1;
+	for (size_t i = 0; i < loop_num; i++)
+	{
+		auto t1 = std::chrono::high_resolution_clock::now();
+		queue.enqueueNDRangeKernel(kernel_asm, cl::NullRange, cl::NDRange(28, 64, 256), cl::NDRange(1, 1, 256));
+		queue.finish();
+		auto t2 = std::chrono::high_resolution_clock::now();
+		if (test_performance)
+			std::cout << "== Infer " << i << ", time = " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() << " micro sec." << std::endl;
+	}
+
+	std::cout << "== Read result." << std::endl;
+
+	return 0;
+}
+
 int main(int argc, char **argv)
 {
 	std::cout << "== Debug MACRO tip:" << std::endl;
@@ -78,6 +144,8 @@ int main(int argc, char **argv)
 	}
 	cl::Device default_device = all_devices[0];
 	std::cout << "Using device: " << default_device.getInfo<CL_DEVICE_NAME>() << "\n";
+
+	// return test_build_asm(default_device);
 
 	std::cout << "== Create context" << std::endl;
 	cl::Context context({default_device});
