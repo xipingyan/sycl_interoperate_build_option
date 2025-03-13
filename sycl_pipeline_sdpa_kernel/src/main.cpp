@@ -234,12 +234,97 @@ int test_sycl_olc_interoperate_l0_backend()
 	return 0;
 }
 
+int test_build_asm() {
+#if 0
+	std::string fun_name = "igc_check";
+	const char *kernel_code = R""""(
+        // Kernel name: igc_check
+        kernel void igc_check() {
+            __asm__ volatile(
+                    ".decl AA0 v_type=G type=ud num_elts=1\n"
+                    ".decl AA1 v_type=G type=ud num_elts=1\n"
+                    ".implicit_PSEUDO_INPUT AA0 offset=256 size=4\n"
+                    ".implicit_PSEUDO_INPUT AA1 offset=256 size=4\n"
+                    "mov (M1_NM,1) AA0(0,0)<1> AA1(0,0)<0;1,0>\n"
+            );
+        }
+        )"""";
+	// global and local range.
+	sycl::nd_range ndr = sycl::nd_range{sycl::range{256, 64, 64}, sycl::range{8, 8, 8}};
+	std::vector<std::string> option_flags = {};
+#else
+	std::string fun_name = "is_local_block_io_supported";
+	std::string kernel_code =
+		"__attribute__((intel_reqd_sub_group_size(8)))"
+		"__attribute__((reqd_work_group_size(8, 1, 1)))"
+		"void kernel is_local_block_io_supported(global uchar* dst) {"
+		"    uint lid = get_sub_group_local_id();"
+		"    uchar val = (uchar)lid * 2;"
+		"    __local uchar tmp_slm[8];"
+		"    intel_sub_group_block_write_uc2(tmp_slm, (uchar2)(val));"
+		"    barrier(CLK_LOCAL_MEM_FENCE);"
+		"    uchar2 read = intel_sub_group_block_read_uc2(tmp_slm);"
+		"    dst[lid] = read.s0 + 1;"
+		"}";
+	// global and local range.
+	sycl::nd_range ndr = sycl::nd_range{sycl::range{256, 64, 64}, sycl::range{1, 1, 8}};
+
+	std::vector<std::string> option_flags = {
+		// "-cl-mad-enable", "-cl-std=CL2.0", 
+		"-Dcl_intel_subgroup_local_block_io", 
+		"-DLOCAL_BLOCK_IO_SUPPORTED=1"
+	};
+#endif
+
+	auto queue = sycl::queue(sycl::gpu_selector_v);
+	std::cout << "  == Using "
+			  << queue.get_device().get_info<sycl::info::device::name>()
+			  << ", Backend: " << queue.get_backend()
+			  << std::endl;
+
+	std::cout << "  == Start to kernel_bundle opencl source" << std::endl;
+	sycl::kernel_bundle<sycl::bundle_state::ext_oneapi_source> kb_src =
+		syclex::create_kernel_bundle_from_source(
+			queue.get_context(),
+			syclex::source_language::opencl,
+			kernel_code);
+
+	// Compile and link the kernel from the source definition.
+	std::cout << "  == Start to kernel_bundle kb_src" << std::endl;
+
+	sycl::kernel_bundle<sycl::bundle_state::executable> kb_exe = syclex::build(kb_src, syclex::properties{syclex::build_options{option_flags}});
+
+	// Get a "kernel" object representing the kernel defined in the
+	// source string.
+	std::cout << "  == Start to get sycl::kernel" << std::endl;
+	sycl::kernel k = kb_exe.ext_oneapi_get_kernel(fun_name);
+
+	std::cout << "  == Start to submit" << std::endl;
+	sycl::event ret_ev;
+	bool test_performance = true;
+	size_t loop_num = test_performance ? 5 : 1;
+	for (size_t i = 0; i < loop_num; i++)
+	{
+		auto t1 = std::chrono::high_resolution_clock::now();
+		ret_ev = queue.submit([&](sycl::handler &cgh)
+						  {
+						// Invoke the kernel over an nd-range.
+						cgh.parallel_for(ndr, k); });
+		ret_ev.wait();
+		auto t2 = std::chrono::high_resolution_clock::now();
+		if (test_performance)
+			std::cout << "  == Infer " << i << ", time = " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() << " micro sec." << std::endl;
+	}
+	return 0;
+}
+
 int main()
 {
     std::cout << "== Debug MACRO tip:" << std::endl;
     std::cout << "  Default:        test accuracy only." << std::endl;
     std::cout << "  PERFORMANCE=1:  Test performance only." << std::endl;
 
+	// return test_build_asm();
     test_sycl_olc_interoperate_l0_backend();
 
     return 0;
