@@ -135,6 +135,8 @@ int test_sycl_olc_interoperate_l0_backend()
 			  << queue.get_device().get_info<sycl::info::device::name>()
 			  << ", Backend: " << queue.get_backend()
 			  << std::endl;
+	std::cout << "  == Using driver_version: "
+			  << queue.get_device().get_info<sycl::info::device::driver_version>() << std::endl;			  
 
 	sycl::event ev;
 	// std::vector<std::pair<sycl::buffer<uint8_t, 1>, bool>> params;
@@ -235,6 +237,14 @@ int test_sycl_olc_interoperate_l0_backend()
 }
 
 int test_build_asm() {
+#if 1 // Read kernel from a file
+	std::string fun_name = "igc_check";
+	std::string kernel_code = load_kernel("../../../run_qwen_0.5b/sdpa_micro_prefill_8660372428234100028_0_0__sa.cl");
+	std::vector<std::string> option_flags = {
+		// "-cl-mad-enable", "-cl-std=CL2.0",
+		"-Dcl_intel_subgroup_local_block_io",
+		"-DLOCAL_BLOCK_IO_SUPPORTED=1"};
+#else
 #if 0
 	std::string fun_name = "igc_check";
 	const char *kernel_code = R""""(
@@ -270,10 +280,10 @@ int test_build_asm() {
 	sycl::nd_range ndr = sycl::nd_range{sycl::range{256, 64, 64}, sycl::range{1, 1, 8}};
 
 	std::vector<std::string> option_flags = {
-		// "-cl-mad-enable", "-cl-std=CL2.0", 
-		"-Dcl_intel_subgroup_local_block_io", 
-		"-DLOCAL_BLOCK_IO_SUPPORTED=1"
-	};
+		// "-cl-mad-enable", "-cl-std=CL2.0",
+		"-Dcl_intel_subgroup_local_block_io",
+		"-DLOCAL_BLOCK_IO_SUPPORTED=1"};
+#endif
 #endif
 
 	auto queue = sycl::queue(sycl::gpu_selector_v);
@@ -299,22 +309,22 @@ int test_build_asm() {
 	std::cout << "  == Start to get sycl::kernel" << std::endl;
 	sycl::kernel k = kb_exe.ext_oneapi_get_kernel(fun_name);
 
-	std::cout << "  == Start to submit" << std::endl;
-	sycl::event ret_ev;
-	bool test_performance = true;
-	size_t loop_num = test_performance ? 5 : 1;
-	for (size_t i = 0; i < loop_num; i++)
-	{
-		auto t1 = std::chrono::high_resolution_clock::now();
-		ret_ev = queue.submit([&](sycl::handler &cgh)
-						  {
-						// Invoke the kernel over an nd-range.
-						cgh.parallel_for(ndr, k); });
-		ret_ev.wait();
-		auto t2 = std::chrono::high_resolution_clock::now();
-		if (test_performance)
-			std::cout << "  == Infer " << i << ", time = " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() << " micro sec." << std::endl;
-	}
+	// std::cout << "  == Start to submit" << std::endl;
+	// sycl::event ret_ev;
+	// bool test_performance = true;
+	// size_t loop_num = test_performance ? 5 : 1;
+	// for (size_t i = 0; i < loop_num; i++)
+	// {
+	// 	auto t1 = std::chrono::high_resolution_clock::now();
+	// 	ret_ev = queue.submit([&](sycl::handler &cgh)
+	// 					  {
+	// 					// Invoke the kernel over an nd-range.
+	// 					cgh.parallel_for(ndr, k); });
+	// 	ret_ev.wait();
+	// 	auto t2 = std::chrono::high_resolution_clock::now();
+	// 	if (test_performance)
+	// 		std::cout << "  == Infer " << i << ", time = " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() << " micro sec." << std::endl;
+	// }
 	return 0;
 }
 
@@ -324,7 +334,7 @@ int main()
     std::cout << "  Default:        test accuracy only." << std::endl;
     std::cout << "  PERFORMANCE=1:  Test performance only." << std::endl;
 
-	// return test_build_asm();
+	return test_build_asm();
     test_sycl_olc_interoperate_l0_backend();
 
     return 0;
