@@ -241,9 +241,12 @@ int test_build_asm() {
 	std::string fun_name = "igc_check";
 	std::string kernel_code = load_kernel("../src/kernel_sdpa_micro/sdpa_micro_prefill_8660372428234100028_0_0__sa.cl");
 	std::vector<std::string> option_flags = {
-		// "-cl-mad-enable", "-cl-std=CL2.0",
-		"-Dcl_intel_subgroup_local_block_io",
-		"-DLOCAL_BLOCK_IO_SUPPORTED=1"};
+		"-cl-mad-enable", "-cl-std=CL2.0",
+		"-cl-intel-256-GRF-per-thread", 
+		"-Dcl_intel_dot_accumulate",
+		"-Dcl_intel_global_float_atomic", 
+		"-Dcl_intel_subgroup_matrix_multiply_accumulate", 
+		"-Dcl_intel_subgroup_split_matrix_multiply_accumulate"};
 #else
 #if 0
 	std::string fun_name = "igc_check";

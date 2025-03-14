@@ -32,19 +32,21 @@ static std::string load_kernel(std::string kernel_fn)
 }
 
 int test_build_asm(cl::Device& default_device, bool test_performance = true) {
-	const char *kernel_code = R""""(
-        // Kernel name: igc_check
-        kernel void igc_check() {
-            __asm__ volatile(
-                    ".decl AA0 v_type=G type=ud num_elts=1\n"
-                    ".decl AA1 v_type=G type=ud num_elts=1\n"
-                    ".implicit_PSEUDO_INPUT AA0 offset=256 size=4\n"
-                    ".implicit_PSEUDO_INPUT AA1 offset=256 size=4\n"
-                    "mov (M1_NM,1) AA0(0,0)<1> AA1(0,0)<0;1,0>\n"
-            );
-        }
-        )"""";
-	
+	// const char *kernel_code = R""""(
+    //     // Kernel name: igc_check
+    //     kernel void igc_check() {
+    //         __asm__ volatile(
+    //                 ".decl AA0 v_type=G type=ud num_elts=1\n"
+    //                 ".decl AA1 v_type=G type=ud num_elts=1\n"
+    //                 ".implicit_PSEUDO_INPUT AA0 offset=256 size=4\n"
+    //                 ".implicit_PSEUDO_INPUT AA1 offset=256 size=4\n"
+    //                 "mov (M1_NM,1) AA0(0,0)<1> AA1(0,0)<0;1,0>\n"
+    //         );
+    //     }
+    //     )"""";
+
+	std::string kernel_code = load_kernel("../../sycl_pipeline_sdpa_kernel/src/kernel_sdpa_micro/sdpa_micro_prefill_8660372428234100028_0_0__sa.cl");
+
 	std::cout << "== Create context" << std::endl;
 	cl::Context context({default_device});
 
@@ -52,12 +54,12 @@ int test_build_asm(cl::Device& default_device, bool test_performance = true) {
 	cl::Program::Sources sources;
 
 	std::cout << "== Put kernel string to source." << std::endl;
-	sources.push_back({kernel_code, strlen(kernel_code)});
+	sources.push_back({kernel_code.c_str(), strlen(kernel_code.c_str())});
 
 	std::cout << "== Construct program with source and context." << std::endl;
 	cl::Program program(context, sources);
 
-	std::string options = "-cl-mad-enable -cl-std=CL2.0";
+	std::string options = "-cl-mad-enable -cl-std=CL2.0 -cl-intel-256-GRF-per-thread -Dcl_intel_dot_accumulate -Dcl_intel_global_float_atomic -Dcl_intel_subgroup_matrix_multiply_accumulate -Dcl_intel_subgroup_split_matrix_multiply_accumulate";
 	if (program.build({default_device}, options.c_str()) != CL_SUCCESS)
 	{
 		std::cout << " Error building: " << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(default_device) << "\n";
@@ -145,7 +147,7 @@ int main(int argc, char **argv)
 	cl::Device default_device = all_devices[0];
 	std::cout << "Using device: " << default_device.getInfo<CL_DEVICE_NAME>() << "\n";
 
-	// return test_build_asm(default_device);
+	return test_build_asm(default_device);
 
 	std::cout << "== Create context" << std::endl;
 	cl::Context context({default_device});
