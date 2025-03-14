@@ -239,7 +239,7 @@ int test_sycl_olc_interoperate_l0_backend()
 int test_build_asm() {
 #if 1 // Read kernel from a file
 	std::string fun_name = "igc_check";
-	std::string kernel_code = load_kernel("../../../run_qwen_0.5b/sdpa_micro_prefill_8660372428234100028_0_0__sa.cl");
+	std::string kernel_code = load_kernel("../src/kernel_sdpa_micro/sdpa_micro_prefill_8660372428234100028_0_0__sa.cl");
 	std::vector<std::string> option_flags = {
 		// "-cl-mad-enable", "-cl-std=CL2.0",
 		"-Dcl_intel_subgroup_local_block_io",
