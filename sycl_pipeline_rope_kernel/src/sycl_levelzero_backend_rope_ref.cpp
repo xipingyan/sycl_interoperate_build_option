@@ -154,8 +154,18 @@ static sycl::event launchSyclKernel(sycl::queue &q, int *buf0, sycl::half *buf1,
 																	   }); })
 			.wait();
 		auto t2 = std::chrono::high_resolution_clock::now();
-		if (test_performance)
-			std::cout << "  == Infer " << i << ", time = " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() << " micro sec." << std::endl;
+		if (test_performance) {
+			auto tm = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+			std::cout << "  == Infer " << i << ", time = " << tm << " micro sec." << std::endl;
+			if (i >= 100)
+			{
+				static int64_t count = 0;
+				static int64_t sum = 0;
+				sum += tm;
+				count++;
+				std::cout << "      Mean: " << (float)sum / count << std::endl;
+			}
+		}
 	}
 	return ret_ev;
 }
