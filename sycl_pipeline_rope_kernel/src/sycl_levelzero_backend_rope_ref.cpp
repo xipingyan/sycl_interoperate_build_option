@@ -50,7 +50,7 @@ static std::string load_kernel(std::string kernel_fn)
 
 static sycl::event launchOpenCLKernelOnline(sycl::queue &q, std::string source,
 											std::string func_name, std::vector<std::pair<void *, size_t>> &params,
-											sycl::event &dep_event, bool test_performance, bool use_option)
+											sycl::event &dep_event, bool test_performance)
 {
 	std::cout << "  == Start to kernel_bundle opencl source" << std::endl;
 	sycl::kernel_bundle<sycl::bundle_state::ext_oneapi_source> kb_src =
@@ -63,7 +63,7 @@ static sycl::event launchOpenCLKernelOnline(sycl::queue &q, std::string source,
 	std::cout << "  == Start to kernel_bundle kb_src" << std::endl;
 	std::vector<std::string> option_flags = {"-cl-mad-enable", "-cl-std=CL2.0"};
 
-	sycl::kernel_bundle<sycl::bundle_state::executable> kb_exe = use_option ? syclex::build(kb_src, syclex::properties{syclex::build_options{option_flags}}) : syclex::build(kb_src);
+	sycl::kernel_bundle<sycl::bundle_state::executable> kb_exe = syclex::build(kb_src, syclex::properties{syclex::build_options{option_flags}});
 
 	// Get a "kernel" object representing the kernel defined in the
 	// source string.
@@ -119,7 +119,7 @@ static sycl::event launchSyclKernel(sycl::queue &q, int *buf0, sycl::half *buf1,
 	auto *output = out_buf;
 
 	sycl::event ret_ev;
-	size_t loop_num = test_performance ? 15 : 1;
+	size_t loop_num = test_performance ? 150 : 1;
 	for (size_t i = 0; i < loop_num; i++)
 	{
 		auto t1 = std::chrono::high_resolution_clock::now();
@@ -216,10 +216,7 @@ static sycl::event launchSyclKernel_expand_shape(sycl::queue &q, sycl::half *buf
 int test_sycl_olc_interoperate_l0_backend_rope_ref()
 {
 	std::cout << "  OCL_KERNEL=1:  [Default] SYCL pipeline + OpenCL C kernel." << std::endl;
-	std::cout << "  SYCL_KERNEL=1: Test SYCL kernel in sycl pipeline.\n"
-			  << std::endl;
-	std::string options = "-cl-mad-enable -cl-std=CL2.0";
-	std::cout << "  USE_OPTION=1:   Build kernel with option:\"" << options << "\"" << std::endl;
+	std::cout << "  SYCL_KERNEL=1: Test SYCL kernel in sycl pipeline.\n" << std::endl;
 	std::cout << "== Test: " << __FUNCTION__ << ", " << __FILE__ << ":" << __LINE__ << std::endl;
 
 	bool test_performance = get_env("PERFORMANCE");
@@ -229,8 +226,6 @@ int test_sycl_olc_interoperate_l0_backend_rope_ref()
 		test_sycl_kernel = false;
 	}
 	std::cout << "  == test_sycl_kernel = " << test_sycl_kernel << std::endl;
-	bool use_option = get_env("USE_OPTION");
-	std::cout << "  == use_option: " << use_option << std::endl;
 
 	// It's hard to read for original cl file.
 	// Convert to clean code via:
@@ -240,7 +235,10 @@ int test_sycl_olc_interoperate_l0_backend_rope_ref()
 
 	// std::cout << "  kernel_source = " << kernel_source << std::endl;
 
-	auto queue = sycl::queue(sycl::gpu_selector_v);
+	// If you want to use OpenCL backend, 
+	// just set env: ONEAPI_DEVICE_SELECTOR=OPENCL:GPU
+	sycl::queue queue = sycl::queue(sycl::gpu_selector_v);
+
 	std::cout << "  == Using "
 			  << queue.get_device().get_info<sycl::info::device::name>()
 			  << ", Backend: " << queue.get_backend()
@@ -309,7 +307,9 @@ int test_sycl_olc_interoperate_l0_backend_rope_ref()
 	if (test_sycl_kernel)
 	{
 		std::cout << "  == run sycl kernel." << std::endl;
-		// auto ret_ev = launchSyclKernel(queue, buf_dev_0, buf_dev_1, buf_dev_2, buf_dev_3, output_dev, test_performance);
+		auto ret_ev = launchSyclKernel(queue, (int *)buf_dev_0, (sycl::half *)buf_dev_1,
+									   (sycl::half *)buf_dev_2, (sycl::half *)buf_dev_3,
+									   (sycl::half *)output_dev, test_performance);
 		// auto ret_ev = launchSyclKernel_expand_shape(queue, buf1, buf2, buf3, output_buf, test_performance);
 		// ret_ev.wait();
 	}
@@ -322,7 +322,7 @@ int test_sycl_olc_interoperate_l0_backend_rope_ref()
 		params.push_back({buf_dev_3, input3.data.size() * sizeof(sycl::half)});
 		params.push_back({output_dev, output_expected.data.size() * sizeof(sycl::half)});
 
-		auto ret_ev = launchOpenCLKernelOnline(queue, kernel_source, "rope_ref_11982042700243959200_0_0__sa", params, ev, test_performance, use_option);
+		auto ret_ev = launchOpenCLKernelOnline(queue, kernel_source, "rope_ref_11982042700243959200_0_0__sa", params, ev, test_performance);
 		ret_ev.wait();
 	}
 
