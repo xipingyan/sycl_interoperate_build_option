@@ -118,6 +118,13 @@ static sycl::event launchSyclKernel(sycl::queue &q, int *buf0, sycl::half *buf1,
 	auto *sin = buf3;
 	auto *output = out_buf;
 
+	size_t kernel_loop_num = 1;
+	if (std::getenv("KERNEL_LOOP"))
+	{
+		kernel_loop_num = std::atoi(std::getenv("KERNEL_LOOP"));
+		std::cout << "  == Get: KERNEL_LOOP = " << kernel_loop_num << std::endl;
+	}
+
 	sycl::event ret_ev;
 	size_t loop_num = test_performance ? 150 : 1;
 	for (size_t i = 0; i < loop_num; i++)
@@ -132,38 +139,43 @@ static sycl::event launchSyclKernel(sycl::queue &q, int *buf0, sycl::half *buf1,
 										const uint h = itm.get_global_id(1);
 										const uint p = (uint)itm.get_global_id(2) / 32;
 										const uint r = (uint)itm.get_global_id(2) % 32;
+										for (size_t kl = 0; kl < kernel_loop_num; kl++)
+										{
+											uint input_idx = ((1 * 0) + (64 * (shape_info[8])) + ((64 * (14 + (shape_info[8] + shape_info[9]))) * 0) + ((64 * (14 + (shape_info[8] + shape_info[9])) * 1) * 0) + ((64 * (14 + (shape_info[8] + shape_info[9])) * 1 * 1 * 1 * 1) * 0) + ((64 * (14 + (shape_info[8] + shape_info[9])) * 1 * 1 * 1 * 1 * (shape_info[1] + 0)) * 0)) + (0) * 1 + (h) * 64 + (p) * (64 * (14 + (shape_info[8] + shape_info[9])) * 1 * 1 * 1 * 1) + (b) * (64 * (14 + (shape_info[8] + shape_info[9])) * 1 * 1 * 1 * 1 * (shape_info[1] + 0));
 
-										uint input_idx = ((1 * 0) + (64 * (shape_info[8])) + ((64 * (14 + (shape_info[8] + shape_info[9]))) * 0) + ((64 * (14 + (shape_info[8] + shape_info[9])) * 1) * 0) + ((64 * (14 + (shape_info[8] + shape_info[9])) * 1 * 1 * 1 * 1) * 0) + ((64 * (14 + (shape_info[8] + shape_info[9])) * 1 * 1 * 1 * 1 * (shape_info[1] + 0)) * 0)) + (0) * 1 + (h) * 64 + (p) * (64 * (14 + (shape_info[8] + shape_info[9])) * 1 * 1 * 1 * 1) + (b) * (64 * (14 + (shape_info[8] + shape_info[9])) * 1 * 1 * 1 * 1 * (shape_info[1] + 0));
+											uint cos_sin_b = b < (shape_info[10]) ? b : 0;
+											uint cos_sin_h = h < 1 ? h : 0;
+											uint cos_sin_p = p;
+											cos_sin_p = cos_sin_p < (shape_info[16]) ? cos_sin_p : 0;
 
-										uint cos_sin_b = b < (shape_info[10]) ? b : 0;
-										uint cos_sin_h = h < 1 ? h : 0;
-										uint cos_sin_p = p;
-										cos_sin_p = cos_sin_p < (shape_info[16]) ? cos_sin_p : 0;
+											uint cos_sin_idx = ((1 * 0) + (64 * 0) + ((64 * (shape_info[16] + 0)) * 0) + ((64 * (shape_info[16] + 0) * 1) * 0) + ((64 * (shape_info[16] + 0) * 1 * 1 * 1 * 1) * 0) + ((64 * (shape_info[16] + 0) * 1 * 1 * 1 * 1 * 1) * 0)) + (0) * 1 + (cos_sin_p) * 64 + (cos_sin_h) * (64 * (shape_info[16] + 0) * 1 * 1 * 1 * 1) + (cos_sin_b) * (64 * (shape_info[16] + 0) * 1 * 1 * 1 * 1 * 1);
+											uint cos_idx = cos_sin_idx;
+											uint sin_idx = cos_sin_idx;
 
-										uint cos_sin_idx = ((1 * 0) + (64 * 0) + ((64 * (shape_info[16] + 0)) * 0) + ((64 * (shape_info[16] + 0) * 1) * 0) + ((64 * (shape_info[16] + 0) * 1 * 1 * 1 * 1) * 0) + ((64 * (shape_info[16] + 0) * 1 * 1 * 1 * 1 * 1) * 0)) + (0) * 1 + (cos_sin_p) * 64 + (cos_sin_h) * (64 * (shape_info[16] + 0) * 1 * 1 * 1 * 1) + (cos_sin_b) * (64 * (shape_info[16] + 0) * 1 * 1 * 1 * 1 * 1);
-										uint cos_idx = cos_sin_idx;
-										uint sin_idx = cos_sin_idx;
-
-										uint output_idx = ((1 * 0) + (64 * 0) + ((64 * (shape_info[32] + 0)) * 0) + ((64 * (shape_info[32] + 0) * 1) * 0) + ((64 * (shape_info[32] + 0) * 1 * 1 * 1 * 1) * 0) + ((64 * (shape_info[32] + 0) * 1 * 1 * 1 * 1 * 14) * 0)) + (0) * 1 + (p) * 64 + (h) * (64 * (shape_info[32] + 0) * 1 * 1 * 1 * 1) + (b) * (64 * (shape_info[32] + 0) * 1 * 1 * 1 * 1 * 14);
-										sycl::half in1 = input[input_idx + r];
-										sycl::half in2 = input[input_idx + 32 + r];
-										output[output_idx + r] = cos[cos_idx + r] * in1 - sin[sin_idx + r] * in2;
-										output[output_idx + 32 + r] = cos[cos_idx + 32 + r] * in2 +
-																	  sin[sin_idx + 32 + r] * in1;
-										// out << "output[" << output_idx << "]=" << output[output_idx + r] << sycl::endl;
+											uint output_idx = ((1 * 0) + (64 * 0) + ((64 * (shape_info[32] + 0)) * 0) + ((64 * (shape_info[32] + 0) * 1) * 0) + ((64 * (shape_info[32] + 0) * 1 * 1 * 1 * 1) * 0) + ((64 * (shape_info[32] + 0) * 1 * 1 * 1 * 1 * 14) * 0)) + (0) * 1 + (p) * 64 + (h) * (64 * (shape_info[32] + 0) * 1 * 1 * 1 * 1) + (b) * (64 * (shape_info[32] + 0) * 1 * 1 * 1 * 1 * 14);
+											sycl::half in1 = input[input_idx + r];
+											sycl::half in2 = input[input_idx + 32 + r];
+											output[output_idx + r] = cos[cos_idx + r] * in1 - sin[sin_idx + r] * in2;
+											output[output_idx + 32 + r] = cos[cos_idx + 32 + r] * in2 +
+																		  sin[sin_idx + 32 + r] * in1;
+											// out << "output[" << output_idx << "]=" << output[output_idx + r] << sycl::endl;
+										}
 																	   }); })
 			.wait();
 		auto t2 = std::chrono::high_resolution_clock::now();
 		if (test_performance) {
 			auto tm = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
-			std::cout << "  == Infer " << i << ", time = " << tm << " micro sec." << std::endl;
+			// std::cout << "  == Infer " << i << ", time = " << tm << " micro sec." << std::endl;
 			if (i >= 100)
 			{
 				static int64_t count = 0;
 				static int64_t sum = 0;
 				sum += tm;
 				count++;
-				std::cout << "      Mean: " << (float)sum / count << std::endl;
+				if (loop_num == i + 1)
+				{
+					std::cout << "      Mean: [" << sum << "/" << count << "] = " << (float)sum / count << " micro sec." << std::endl;
+				}
 			}
 		}
 	}
