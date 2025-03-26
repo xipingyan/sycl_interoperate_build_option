@@ -3067,6 +3067,7 @@ KERNEL(rope_ref)(
 #endif
  __global OUTPUT_TYPE* output)
 {
+	for (int ii = 0; ii < 100000; ii++) {
  const uint b = get_global_id(0);
  const uint h = get_global_id(1);
  const uint p = (uint)get_global_id(2) / HALF_ROTARY_NDIMS;
@@ -3111,6 +3112,7 @@ KERNEL(rope_ref)(
  sin[sin_idx + HALF_ROTARY_NDIMS + r] * in1;
  // printf("output[%d]=%f\n", output_idx + r, output[output_idx + r]);
  // printf("output[%d]=%f\n", output_idx + HALF_ROTARY_NDIMS + r, output[output_idx + HALF_ROTARY_NDIMS + r]);
+	}
 }
 #endif
 #undef KERNEL

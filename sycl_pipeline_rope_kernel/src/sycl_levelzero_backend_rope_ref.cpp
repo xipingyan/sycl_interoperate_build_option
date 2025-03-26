@@ -103,7 +103,21 @@ static sycl::event launchOpenCLKernelOnline(sycl::queue &q, std::string source,
 		ret_ev.wait();
 		auto t2 = std::chrono::high_resolution_clock::now();
 		if (test_performance)
-			std::cout << "  == Infer " << i << ", time = " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() << " micro sec." << std::endl;
+		{
+			auto tm = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+			// std::cout << "  == Infer " << i << ", time = " << tm << " micro sec." << std::endl;
+			if (i >= 100)
+			{
+				static int64_t count = 0;
+				static int64_t sum = 0;
+				sum += tm;
+				count++;
+				if (loop_num == i + 1)
+				{
+					std::cout << "      Mean: [" << sum << "/" << count << "] = " << (float)sum / count << " micro sec." << std::endl;
+				}
+			}
+		}
 	}
 	return ret_ev;
 }
