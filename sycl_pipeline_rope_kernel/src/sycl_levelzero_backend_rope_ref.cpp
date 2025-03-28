@@ -251,8 +251,10 @@ static sycl::event launchSyclKernel_expand_shape(sycl::queue &q, sycl::half *buf
 
 int test_sycl_olc_interoperate_l0_backend_rope_ref()
 {
-	std::cout << "  OCL_KERNEL=1:  [Default] SYCL pipeline + OpenCL C kernel." << std::endl;
-	std::cout << "  SYCL_KERNEL=1: Test SYCL kernel in sycl pipeline.\n" << std::endl;
+	std::cout << "  OCL_KERNEL=1:	[Default] SYCL pipeline + OpenCL C kernel." << std::endl;
+	std::cout << "  SYCL_KERNEL=1:	Test SYCL kernel in sycl pipeline.\n" << std::endl;
+	std::cout << "  OCL_OCLOC=1: 	Test: ocloc compile OpenCL kernel to binary, levelzero call this bin kernel in sycl pipeline.\n"
+			  << std::endl;
 	std::cout << "== Test: " << __FUNCTION__ << ", " << __FILE__ << ":" << __LINE__ << std::endl;
 
 	bool test_performance = get_env("PERFORMANCE");
@@ -262,6 +264,9 @@ int test_sycl_olc_interoperate_l0_backend_rope_ref()
 		test_sycl_kernel = false;
 	}
 	std::cout << "  == test_sycl_kernel = " << test_sycl_kernel << std::endl;
+
+	bool test_ocl_ocloc = get_env("OCL_OCLOC");
+	std::cout << "  == test_ocl_ocloc = " << test_ocl_ocloc << std::endl;
 
 	// It's hard to read for original cl file.
 	// Convert to clean code via:
@@ -358,8 +363,16 @@ int test_sycl_olc_interoperate_l0_backend_rope_ref()
 		params.push_back({buf_dev_3, input3.data.size() * sizeof(sycl::half)});
 		params.push_back({output_dev, output_expected.data.size() * sizeof(sycl::half)});
 
-		auto ret_ev = launchOpenCLKernelOnline(queue, kernel_source, "rope_ref_11982042700243959200_0_0__sa", params, ev, test_performance);
-		ret_ev.wait();
+		if (test_ocl_ocloc)
+		{
+			auto ret_ev = launchOpenCLKernel_OCLOC(queue, kernel_source, "rope_ref_11982042700243959200_0_0__sa", params, ev, test_performance);
+			ret_ev.wait();
+		}
+		else
+		{
+			auto ret_ev = launchOpenCLKernelOnline(queue, kernel_source, "rope_ref_11982042700243959200_0_0__sa", params, ev, test_performance);
+			ret_ev.wait();
+		}
 	}
 
 	// Device to Host

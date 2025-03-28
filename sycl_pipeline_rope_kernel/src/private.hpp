@@ -17,3 +17,7 @@ struct DumpData
     int* to_int(sycl::queue queue);
 };
 DumpData load_dump_data(std::string fn);
+
+sycl::event launchOpenCLKernel_OCLOC(sycl::queue &q, std::string source,
+                                     std::string func_name, std::vector<std::pair<void *, size_t>> &params,
+                                     sycl::event &dep_event, bool test_performance);

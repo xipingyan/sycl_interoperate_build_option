@@ -36,8 +36,6 @@ int main(int argc, char **argv)
 	std::cout << "== Debug MACRO tip:" << std::endl;
 	std::cout << "  Default:        test accuracy only." << std::endl;
 	std::cout << "  PERFORMANCE=1:  Test performance only." << std::endl;
-	std::string options = "-cl-mad-enable -cl-std=CL2.0";
-	std::cout << "  USE_OPTION=1:   Build kernel with option:\"" << options << "\"" << std::endl;
 	std::cout << "== Usage:" << std::endl;
 	std::cout << "  ./ocl_pipeline_rope_kernel [result_fn]" << std::endl;
 
@@ -45,11 +43,6 @@ int main(int argc, char **argv)
 	if (std::getenv("PERFORMANCE"))
 	{
 		test_performance = std::getenv("PERFORMANCE") == std::string("1");
-	}
-	bool use_option = false;
-	if (std::getenv("USE_OPTION"))
-	{
-		use_option = std::getenv("USE_OPTION") == std::string("1");
 	}
 
 	std::cout << "== ocl_pipeline_rope_kernel." << std::endl;
@@ -92,7 +85,8 @@ int main(int argc, char **argv)
 	cl::Program::Sources sources;
 
 	// kernel
-	auto kernel_fn = "../../sycl_pipeline_rope_kernel/src/kernel_rope_ref/SYCL_LZ_program_1_bucket_0_part_53_8491392767821923070.cl";
+	// auto kernel_fn = "../../sycl_pipeline_rope_kernel/src/kernel_rope_ref/SYCL_LZ_program_1_bucket_0_part_53_8491392767821923070.cl";
+	auto kernel_fn = "../../sycl_pipeline_rope_kernel/src/kernel_rope_ref/rope_loop_100000.cl";
 	std::cout << "== load kernel: " << kernel_fn << std::endl;
 	std::string kernel_code = load_kernel(kernel_fn);
 
@@ -102,7 +96,8 @@ int main(int argc, char **argv)
 	std::cout << "== Construct program with source and context." << std::endl;
 	cl::Program program(context, sources);
 
-	if (program.build({default_device}, use_option ? options.c_str() : "") != CL_SUCCESS)
+	std::string options = "-cl-mad-enable -cl-std=CL2.0";
+	if (program.build({default_device}, options.c_str()) != CL_SUCCESS)
 	{
 		std::cout << " Error building: " << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(default_device) << "\n";
 		exit(1);
@@ -174,8 +169,21 @@ int main(int argc, char **argv)
 		queue.enqueueNDRangeKernel(kernel_add, cl::NullRange, cl::NDRange(1, 14, 192), cl::NDRange(1, 2, 192));
 		queue.finish();
 		auto t2 = std::chrono::high_resolution_clock::now();
-		if (test_performance)
-			std::cout << "== Infer " << i << ", time = " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() << " micro sec." << std::endl;
+		if (test_performance) {
+			auto tm = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+			std::cout << "== Infer " << i << ", time = " << tm << " micro sec." << std::endl;
+			if (i >= 100) {
+				static int64_t total_tm = 0;
+				static int total_num = 0;
+				total_tm += tm;
+				total_num += 1;
+				if (i + 1 == loop_num)
+				{
+					std::cout << "== Mean [" << total_tm << "/" << total_num << "]" << (float)total_tm / total_num << " micro sec." << std::endl;
+				}
+			}
+		}
+			
 	}
 
 	std::cout << "== Read result." << std::endl;
