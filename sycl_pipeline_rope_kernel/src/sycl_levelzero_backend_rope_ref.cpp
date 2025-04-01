@@ -82,6 +82,9 @@ static sycl::event launchOpenCLKernelOnline(sycl::queue &q, std::string source,
 		std::cout << "    params[" << i << "] = " << params[i].second << ", addr = " << params[i].first << std::endl;
 	}
 
+	auto profiling_host_tm = CStaticTM::create();
+	auto profiling_kernel_tm = CStaticTM::create();
+
 	std::cout << "  == Start to submit" << std::endl;
 	sycl::event ret_ev;
 	size_t loop_num = test_performance ? 150 : 1;
@@ -104,17 +107,19 @@ static sycl::event launchOpenCLKernelOnline(sycl::queue &q, std::string source,
 		auto t2 = std::chrono::high_resolution_clock::now();
 		if (test_performance)
 		{
+			auto kernel_tm = calc_kernel_tm(ret_ev);
 			auto tm = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
 			// std::cout << "  == Infer " << i << ", time = " << tm << " micro sec." << std::endl;
 			if (i >= 100)
 			{
-				static int64_t count = 0;
-				static int64_t sum = 0;
-				sum += tm;
-				count++;
+				profiling_host_tm->add(tm);
+				profiling_kernel_tm->add(kernel_tm);
+
 				if (loop_num == i + 1)
 				{
-					std::cout << "      Mean: [" << sum << "/" << count << "] = " << (float)sum / count << " micro sec." << std::endl;
+					profiling_host_tm->print("--->host   tm:");
+					profiling_kernel_tm->print("--->kernel tm:");
+					profiling_host_tm->print_host_kernel_diff("---> host - kernel tm:", profiling_kernel_tm);
 				}
 			}
 		}
@@ -139,56 +144,63 @@ static sycl::event launchSyclKernel(sycl::queue &q, int *buf0, sycl::half *buf1,
 		std::cout << "  == Get: KERNEL_LOOP = " << kernel_loop_num << std::endl;
 	}
 
+	auto profiling_host_tm = CStaticTM::create();
+	auto profiling_kernel_tm = CStaticTM::create();
+
 	sycl::event ret_ev;
 	size_t loop_num = test_performance ? 150 : 1;
 	for (size_t i = 0; i < loop_num; i++)
 	{
 		auto t1 = std::chrono::high_resolution_clock::now();
-		q.submit([&](sycl::handler &cgh)
-				 { 
+		auto cur_event = q.submit([&](sycl::handler &cgh)
+								  { 
 					// auto out = sycl::stream(1024, 768, cgh);
 					cgh.parallel_for<class rope_sycl>(ndr, [=](sycl::nd_item<3> itm)
-													 {
-										const uint b = itm.get_global_id(0);
-										const uint h = itm.get_global_id(1);
-										const uint p = (uint)itm.get_global_id(2) / 32;
-										const uint r = (uint)itm.get_global_id(2) % 32;
-										for (size_t kl = 0; kl < kernel_loop_num; kl++)
-										{
-											uint input_idx = ((1 * 0) + (64 * (shape_info[8])) + ((64 * (14 + (shape_info[8] + shape_info[9]))) * 0) + ((64 * (14 + (shape_info[8] + shape_info[9])) * 1) * 0) + ((64 * (14 + (shape_info[8] + shape_info[9])) * 1 * 1 * 1 * 1) * 0) + ((64 * (14 + (shape_info[8] + shape_info[9])) * 1 * 1 * 1 * 1 * (shape_info[1] + 0)) * 0)) + (0) * 1 + (h) * 64 + (p) * (64 * (14 + (shape_info[8] + shape_info[9])) * 1 * 1 * 1 * 1) + (b) * (64 * (14 + (shape_info[8] + shape_info[9])) * 1 * 1 * 1 * 1 * (shape_info[1] + 0));
+													  {
+															for (size_t kl = 0; kl < kernel_loop_num; kl++) 
+															{
+																const uint b = itm.get_global_id(0);
+																const uint h = itm.get_global_id(1);
+																const uint p = (uint)itm.get_global_id(2) / 32;
+																const uint r = (uint)itm.get_global_id(2) % 32;
+															
+																uint input_idx = ((1 * 0) + (64 * (shape_info[8])) + ((64 * (14 + (shape_info[8] + shape_info[9]))) * 0) + ((64 * (14 + (shape_info[8] + shape_info[9])) * 1) * 0) + ((64 * (14 + (shape_info[8] + shape_info[9])) * 1 * 1 * 1 * 1) * 0) + ((64 * (14 + (shape_info[8] + shape_info[9])) * 1 * 1 * 1 * 1 * (shape_info[1] + 0)) * 0)) + (0) * 1 + (h) * 64 + (p) * (64 * (14 + (shape_info[8] + shape_info[9])) * 1 * 1 * 1 * 1) + (b) * (64 * (14 + (shape_info[8] + shape_info[9])) * 1 * 1 * 1 * 1 * (shape_info[1] + 0));
 
-											uint cos_sin_b = b < (shape_info[10]) ? b : 0;
-											uint cos_sin_h = h < 1 ? h : 0;
-											uint cos_sin_p = p;
-											cos_sin_p = cos_sin_p < (shape_info[16]) ? cos_sin_p : 0;
+																uint cos_sin_b = b < (shape_info[10]) ? b : 0;
+																uint cos_sin_h = h < 1 ? h : 0;
+																uint cos_sin_p = p;
+																cos_sin_p = cos_sin_p < (shape_info[16]) ? cos_sin_p : 0;
 
-											uint cos_sin_idx = ((1 * 0) + (64 * 0) + ((64 * (shape_info[16] + 0)) * 0) + ((64 * (shape_info[16] + 0) * 1) * 0) + ((64 * (shape_info[16] + 0) * 1 * 1 * 1 * 1) * 0) + ((64 * (shape_info[16] + 0) * 1 * 1 * 1 * 1 * 1) * 0)) + (0) * 1 + (cos_sin_p) * 64 + (cos_sin_h) * (64 * (shape_info[16] + 0) * 1 * 1 * 1 * 1) + (cos_sin_b) * (64 * (shape_info[16] + 0) * 1 * 1 * 1 * 1 * 1);
-											uint cos_idx = cos_sin_idx;
-											uint sin_idx = cos_sin_idx;
+																uint cos_sin_idx = ((1 * 0) + (64 * 0) + ((64 * (shape_info[16] + 0)) * 0) + ((64 * (shape_info[16] + 0) * 1) * 0) + ((64 * (shape_info[16] + 0) * 1 * 1 * 1 * 1) * 0) + ((64 * (shape_info[16] + 0) * 1 * 1 * 1 * 1 * 1) * 0)) + (0) * 1 + (cos_sin_p) * 64 + (cos_sin_h) * (64 * (shape_info[16] + 0) * 1 * 1 * 1 * 1) + (cos_sin_b) * (64 * (shape_info[16] + 0) * 1 * 1 * 1 * 1 * 1);
+																uint cos_idx = cos_sin_idx;
+																uint sin_idx = cos_sin_idx;
 
-											uint output_idx = ((1 * 0) + (64 * 0) + ((64 * (shape_info[32] + 0)) * 0) + ((64 * (shape_info[32] + 0) * 1) * 0) + ((64 * (shape_info[32] + 0) * 1 * 1 * 1 * 1) * 0) + ((64 * (shape_info[32] + 0) * 1 * 1 * 1 * 1 * 14) * 0)) + (0) * 1 + (p) * 64 + (h) * (64 * (shape_info[32] + 0) * 1 * 1 * 1 * 1) + (b) * (64 * (shape_info[32] + 0) * 1 * 1 * 1 * 1 * 14);
-											sycl::half in1 = input[input_idx + r];
-											sycl::half in2 = input[input_idx + 32 + r];
-											output[output_idx + r] = cos[cos_idx + r] * in1 - sin[sin_idx + r] * in2;
-											output[output_idx + 32 + r] = cos[cos_idx + 32 + r] * in2 +
-																		  sin[sin_idx + 32 + r] * in1;
-											// out << "output[" << output_idx << "]=" << output[output_idx + r] << sycl::endl;
-										}
-																	   }); })
-			.wait();
+																uint output_idx = ((1 * 0) + (64 * 0) + ((64 * (shape_info[32] + 0)) * 0) + ((64 * (shape_info[32] + 0) * 1) * 0) + ((64 * (shape_info[32] + 0) * 1 * 1 * 1 * 1) * 0) + ((64 * (shape_info[32] + 0) * 1 * 1 * 1 * 1 * 14) * 0)) + (0) * 1 + (p) * 64 + (h) * (64 * (shape_info[32] + 0) * 1 * 1 * 1 * 1) + (b) * (64 * (shape_info[32] + 0) * 1 * 1 * 1 * 1 * 14);
+																sycl::half in1 = input[input_idx + r];
+																sycl::half in2 = input[input_idx + 32 + r];
+																output[output_idx + r] = cos[cos_idx + r] * in1 - sin[sin_idx + r] * in2;
+																output[output_idx + 32 + r] = cos[cos_idx + 32 + r] * in2 +
+																							sin[sin_idx + 32 + r] * in1;
+																							// out << "output[" << output_idx << "]=" << output[output_idx + r] << sycl::endl;
+															} 
+														}); });
+		cur_event.wait();
 		auto t2 = std::chrono::high_resolution_clock::now();
-		if (test_performance) {
+		if (test_performance)
+		{
+			auto kernel_tm = calc_kernel_tm(cur_event);
 			auto tm = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
 			// std::cout << "  == Infer " << i << ", time = " << tm << " micro sec." << std::endl;
 			if (i >= 100)
 			{
-				static int64_t count = 0;
-				static int64_t sum = 0;
-				sum += tm;
-				count++;
+				profiling_host_tm->add(tm);
+				profiling_kernel_tm->add(kernel_tm);
+
 				if (loop_num == i + 1)
 				{
-					std::cout << "      Mean: [" << sum << "/" << count << "] = " << (float)sum / count << " micro sec." << std::endl;
+					profiling_host_tm->print("--->host   tm:");
+					profiling_kernel_tm->print("--->kernel tm:");
+					profiling_host_tm->print_host_kernel_diff("---> host - kernel tm:", profiling_kernel_tm);
 				}
 			}
 		}
@@ -252,7 +264,8 @@ static sycl::event launchSyclKernel_expand_shape(sycl::queue &q, sycl::half *buf
 int test_sycl_olc_interoperate_l0_backend_rope_ref()
 {
 	std::cout << "  OCL_KERNEL=1:  [Default] SYCL pipeline + OpenCL C kernel." << std::endl;
-	std::cout << "  SYCL_KERNEL=1: Test SYCL kernel in sycl pipeline.\n" << std::endl;
+	std::cout << "  SYCL_KERNEL=1: Test SYCL kernel in sycl pipeline.\n"
+			  << std::endl;
 	std::cout << "== Test: " << __FUNCTION__ << ", " << __FILE__ << ":" << __LINE__ << std::endl;
 
 	bool test_performance = get_env("PERFORMANCE");
@@ -271,9 +284,9 @@ int test_sycl_olc_interoperate_l0_backend_rope_ref()
 
 	// std::cout << "  kernel_source = " << kernel_source << std::endl;
 
-	// If you want to use OpenCL backend, 
+	// If you want to use OpenCL backend,
 	// just set env: ONEAPI_DEVICE_SELECTOR=OPENCL:GPU
-	sycl::queue queue = sycl::queue(sycl::gpu_selector_v);
+	sycl::queue queue = sycl::queue(sycl::gpu_selector_v, sycl::property::queue::enable_profiling());
 
 	std::cout << "  == Using "
 			  << queue.get_device().get_info<sycl::info::device::name>()
@@ -366,9 +379,6 @@ int test_sycl_olc_interoperate_l0_backend_rope_ref()
 	queue.memcpy(output_host, output_dev, output_expected.data.size() * sizeof(sycl::half)).wait();
 
 	// Compare result.
-	// ???????????????????????
-	// I don't why I can't get result from output_buf(it is shared),
-	// because If I replace to some simple kernels, I can get result from output_buf.
 	if (!test_performance)
 	{
 		std::cout << "  == Compare input and output:" << std::endl;
