@@ -7,5 +7,6 @@
     source /opt/intel/oneapi/setvars.sh 
     cmake -DCMAKE_CXX_COMPILER=icpx ..
 
-    SYCL_UR_TRACE=3
-    ./sycl_pipeline_rope_kernel
+    make -j20 
+
+    ../run.sh
